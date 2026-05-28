@@ -1,0 +1,21 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Environment variables
+.env
+
+# Frontend / Node
+perdin/node_modules/
+perdin/dist/
+perdin/.env*
+
+# IDE / OS Files
+.vscode/
+.idea/
+.DS_Store

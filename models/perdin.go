@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// PerdinRequest merepresentasikan tabel perdin_requests
 type PerdinRequest struct {
 	ID uint `gorm:"primaryKey"`
 
@@ -26,7 +25,6 @@ type PerdinRequest struct {
 	Status           string    `gorm:"not null;default:'PENDING'"`
 	TanggalPengajuan time.Time `gorm:"type:date;not null"`
 
-	// Gunakan Pointer (*) agar bisa bernilai NULL saat belum di-approve
 	DailyAllowance *float64 `gorm:"type:decimal(15,2)"`
 	Currency       *string  `gorm:"type:varchar(3)"`
 	TotalAllowance *float64 `gorm:"type:decimal(15,2)"`

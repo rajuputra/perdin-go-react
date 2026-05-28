@@ -2,7 +2,6 @@ package dto
 
 import "time"
 
-// PerdinSubmissionRequest mirip dengan PerdinSubmissionRequest.java
 type PerdinSubmissionRequest struct {
 	Purpose string `json:"purpose" binding:"required"`
 	// time_format sangat penting agar Go tahu format tanggal dari JSON frontend (YYYY-MM-DD)
@@ -12,7 +11,6 @@ type PerdinSubmissionRequest struct {
 	DestinationCityID uint      `json:"destinationCityId" binding:"required"`
 }
 
-// PerdinResponse mirip dengan PerdinResponse.java
 type PerdinResponse struct {
 	ID                  uint     `json:"id"`
 	Username            string   `json:"username"`

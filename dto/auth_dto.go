@@ -1,4 +1,3 @@
-// File: dto/auth_dto.go
 package dto
 
 type LoginRequest struct {

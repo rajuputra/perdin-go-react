@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// 1. Definisikan Interface (Kontrak)
+// Interface (Kontrak)
 type UserRepository interface {
 	FindByUsername(username string) (models.User, error)
 	ExistsByUsername(username string) bool
@@ -16,24 +16,23 @@ type UserRepository interface {
 	FindAll() ([]models.User, error)
 }
 
-// 2. Tambahkan implementasi fungsinya di paling bawah file:
 func (r *userRepository) FindAll() ([]models.User, error) {
 	var users []models.User
 	err := r.db.Find(&users).Error
 	return users, err
 }
 
-// 2. Buat struct implementasinya
+// struct implementasi
 type userRepository struct {
 	db *gorm.DB
 }
 
-// 3. Constructor (mirip dependency injection di Spring)
+// Constructor
 func NewUserRepository(db *gorm.DB) UserRepository {
 	return &userRepository{db}
 }
 
-// 4. Implementasi Method
+// Implementasi Method
 func (r *userRepository) FindByUsername(username string) (models.User, error) {
 	var user models.User
 	err := r.db.Where("username = ?", username).First(&user).Error

@@ -1,4 +1,3 @@
-// File: handler/auth_handler.go
 package handler
 
 import (

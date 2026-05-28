@@ -29,7 +29,7 @@ func (r *perdinRepository) Save(perdin models.PerdinRequest) (models.PerdinReque
 
 func (r *perdinRepository) FindById(id uint) (models.PerdinRequest, error) {
 	var perdin models.PerdinRequest
-	// Preload() ini ibarat FetchType.EAGER di Java. Kita butuh relasinya ditarik sekaligus.
+
 	err := r.db.Preload("User").Preload("OriginCity").Preload("DestinationCity").First(&perdin, id).Error
 	return perdin, err
 }
@@ -38,7 +38,7 @@ func (r *perdinRepository) FindByUserId(userId uint) ([]models.PerdinRequest, er
 	var perdins []models.PerdinRequest
 	err := r.db.Preload("User").Preload("OriginCity").Preload("DestinationCity").
 		Where("user_id = ?", userId).
-		Order("start_date desc"). // Pengajuan terbaru di atas
+		Order("start_date desc").
 		Find(&perdins).Error
 	return perdins, err
 }
@@ -47,17 +47,16 @@ func (r *perdinRepository) FindByStatus(status string) ([]models.PerdinRequest, 
 	var perdins []models.PerdinRequest
 	err := r.db.Preload("User").Preload("OriginCity").Preload("DestinationCity").
 		Where("status = ?", status).
-		Order("start_date desc"). // Urutkan tanggal keberangkatan terbaru
+		Order("start_date desc").
 		Find(&perdins).Error
 	return perdins, err
 }
 
 func (r *perdinRepository) FindAll() ([]models.PerdinRequest, error) {
 	var perdins []models.PerdinRequest
-	// Eksekusi sorting multi-kriteria persis seperti @Query di Spring Boot!
 	err := r.db.Preload("User").Preload("OriginCity").Preload("DestinationCity").
-		Order("start_date desc"). // 1. Tanggal keberangkatan terbaru
-		Order("status asc").      // 2. Status (APPROVED otomatis naik ke atas)
+		Order("start_date desc").
+		Order("status asc").
 		Find(&perdins).Error
 	return perdins, err
 }

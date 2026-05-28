@@ -1,4 +1,3 @@
-// File: middleware/auth_middleware.go
 package middleware
 
 import (
@@ -41,7 +40,7 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RequireRole membatasi akses berdasarkan role (mirip @PreAuthorize di Spring)
+// RequireRole membatasi akses berdasarkan role
 func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userRole, exists := c.Get("role")

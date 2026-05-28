@@ -18,12 +18,12 @@ import (
 )
 
 func main() {
-	// 1. Load Env & Connect DB
+	// Load Env & Connect DB
 	godotenv.Load()
 	config.ConnectDB()
 	config.DB.AutoMigrate(&models.User{}, &models.City{}, &models.PerdinRequest{})
 
-	// 2. Setup Dependency Injection
+	// Setup Dependency Injection
 	// Repositories
 	userRepo := repository.NewUserRepository(config.DB)
 	cityRepo := repository.NewCityRepository(config.DB)
@@ -39,10 +39,10 @@ func main() {
 	userHandler := handler.NewUserHandler(userRepo)
 	perdinHandler := handler.NewPerdinHandler(perdinSvc)
 
-	// 3. Setup Gin Router
+	// Setup Gin Router
 	router := gin.Default()
 
-	// 4. Konfigurasi CORS (SANGAT PENTING UNTUK REACT)
+	// Konfigurasi CORS
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -52,7 +52,7 @@ func main() {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// 5. Setup Routes
+	// Setup Routes
 	api := router.Group("/api")
 	{
 		// PUBLIC ROUTES (Tanpa Token)

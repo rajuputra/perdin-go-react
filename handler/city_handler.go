@@ -1,4 +1,3 @@
-// File: handler/city_handler.go
 package handler
 
 import (

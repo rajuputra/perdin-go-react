@@ -35,7 +35,7 @@ func mapToResponse(p models.PerdinRequest) dto.PerdinResponse {
 		ID:                  p.ID,
 		Username:            p.User.Username,
 		Purpose:             p.Purpose,
-		StartDate:           p.StartDate.Format("2006-01-02"), // Format ke YYYY-MM-DD string
+		StartDate:           p.StartDate.Format("2006-01-02"),
 		EndDate:             p.EndDate.Format("2006-01-02"),
 		OriginCityName:      p.OriginCity.Name,
 		DestinationCityName: p.DestinationCity.Name,
@@ -45,11 +45,11 @@ func mapToResponse(p models.PerdinRequest) dto.PerdinResponse {
 		DailyAllowance:      p.DailyAllowance,
 		Currency:            p.Currency,
 		TotalAllowance:      p.TotalAllowance,
-		Distance:            nil, // Default nil, diisi hanya saat get detail
+		Distance:            nil,
 	}
 }
 
-// Struct penampung hitungan (mirip Record AllowanceCalculation di Java)
+// Struct penampung hitungan
 type allowanceCalc struct {
 	Distance float64
 	Daily    float64
@@ -116,7 +116,7 @@ func (s *perdinService) GetPerdinDetailWithCalculation(perdinId uint) (dto.Perdi
 	response := mapToResponse(perdin)
 	calc := s.performCalculations(perdin)
 
-	// Masukkan jarak tempuh
+	// jarak tempuh
 	distance := calc.Distance
 	response.Distance = &distance
 

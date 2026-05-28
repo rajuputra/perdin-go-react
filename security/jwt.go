@@ -1,4 +1,3 @@
-// File: security/jwt.go
 package security
 
 import (

@@ -1,4 +1,3 @@
-// File: handler/perdin_handler.go
 package handler
 
 import (
