@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Eye, CheckCircle, XCircle, Loader2, MapPin, Calendar, AlertCircle } from 'lucide-react';
-import api from '../../api/axios';
+import api, { apiMessage } from '../../api/axios';
 import type { PerdinRequest } from '../../types';
 
 const ApprovalList: React.FC = () => {
@@ -16,23 +16,29 @@ const ApprovalList: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     setError('');
     try {
       const endpoint = activeTab === 'NEW' ? '/api/perdin?status=PENDING' : '/api/perdin';
-      const response = await api.get<PerdinRequest[]>(endpoint);
+      const response = await api.get<PerdinRequest[]>(endpoint, { signal });
+      if (signal?.aborted) return;
       setRequests(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal mengambil data pengajuan Perdin.');
+    } catch (err) {
+      if (signal?.aborted) return;
+      setError(apiMessage(err) || 'Gagal mengambil data pengajuan Perdin.');
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) setIsLoading(false);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
-    fetchRequests();
-  }, [activeTab]);
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) void fetchRequests(controller.signal);
+    });
+    return () => controller.abort();
+  }, [fetchRequests]);
 
   const handlePreview = async (id: number) => {
     setIsDetailLoading(true);
@@ -41,8 +47,8 @@ const ApprovalList: React.FC = () => {
     try {
       const response = await api.get<PerdinRequest>(`/api/perdin/${id}/detail`);
       setSelectedDetail(response.data);
-    } catch (err: any) {
-      setActionError(err.response?.data?.message || 'Gagal memuat detail pengajuan.');
+    } catch (err) {
+      setActionError(apiMessage(err) || 'Gagal memuat detail pengajuan.');
     } finally {
       setIsDetailLoading(false);
     }
@@ -62,8 +68,8 @@ const ApprovalList: React.FC = () => {
       await api.put(`/api/perdin/${selectedDetail.id}/${action}`);
       handleCloseModal();
       fetchRequests();
-    } catch (err: any) {
-      setActionError(err.response?.data?.message || `Gagal memproses pengajuan.`);
+    } catch (err) {
+      setActionError(apiMessage(err) || `Gagal memproses pengajuan.`);
     } finally {
       setIsSubmitting(false);
     }

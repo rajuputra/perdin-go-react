@@ -34,6 +34,7 @@ func (s *allowanceService) CalculateDistance(lat1, lon1, lat2, lon2 float64) flo
 	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
 		math.Cos(toRadians(lat1))*math.Cos(toRadians(lat2))*
 			math.Sin(dLon/2)*math.Sin(dLon/2)
+	a = max(0, min(1, a))
 
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 
@@ -42,7 +43,7 @@ func (s *allowanceService) CalculateDistance(lat1, lon1, lat2, lon2 float64) flo
 
 func (s *allowanceService) CalculateDuration(startDate, endDate time.Time) int {
 	// Menghitung selisih hari. Ditambah 1 karena hari H dihitung penuh.
-	days := int(endDate.Sub(startDate).Hours() / 24)
+	days := int((endDate.Unix() - startDate.Unix()) / 86400)
 	return days + 1
 }
 

@@ -11,7 +11,7 @@ type CityRepository interface {
 	FindById(id uint) (models.City, error)
 	Save(city models.City) (models.City, error)
 	DeleteById(id uint) error
-	ExistsById(id uint) bool
+	Update(city models.City) error
 }
 
 type cityRepository struct {
@@ -23,7 +23,7 @@ func NewCityRepository(db *gorm.DB) CityRepository {
 }
 
 func (r *cityRepository) FindAll() ([]models.City, error) {
-	var cities []models.City
+	cities := []models.City{}
 	err := r.db.Find(&cities).Error
 	return cities, err
 }
@@ -35,16 +35,25 @@ func (r *cityRepository) FindById(id uint) (models.City, error) {
 }
 
 func (r *cityRepository) Save(city models.City) (models.City, error) {
-	err := r.db.Save(&city).Error
+	err := r.db.Create(&city).Error
 	return city, err
 }
 
 func (r *cityRepository) DeleteById(id uint) error {
-	return r.db.Delete(&models.City{}, id).Error
+	return requireAffectedRow(r.db.Delete(&models.City{}, id))
 }
 
-func (r *cityRepository) ExistsById(id uint) bool {
-	var count int64
-	r.db.Model(&models.City{}).Where("id = ?", id).Count(&count)
-	return count > 0
+func (r *cityRepository) Update(city models.City) error {
+	return requireAffectedRow(r.db.Model(&models.City{}).Where("id = ?", city.ID).
+		Select("name", "latitude", "longitude", "province", "island", "is_foreign").Updates(city))
+}
+
+func requireAffectedRow(result *gorm.DB) error {
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

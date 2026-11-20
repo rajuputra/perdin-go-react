@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, X, AlertCircle, Loader2 } from 'lucide-react';
-import api from '../../api/axios';
+import api, { apiMessage } from '../../api/axios';
 import type { City, CityPayload } from '../../types';
 
 const initialFormState: CityPayload = {
@@ -25,22 +25,28 @@ const CityMaster: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const fetchCities = async () => {
+  const fetchCities = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await api.get<City[]>('/api/cities');
+      const response = await api.get<City[]>('/api/cities', { signal });
+      if (signal?.aborted) return;
       setCities(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal mengambil data kota.');
+    } catch (err) {
+      if (signal?.aborted) return;
+      setError(apiMessage(err) || 'Gagal mengambil data kota.');
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchCities();
-  }, []);
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) void fetchCities(controller.signal);
+    });
+    return () => controller.abort();
+  }, [fetchCities]);
 
   const handleOpenAddModal = () => {
     setModalMode('ADD');
@@ -91,8 +97,8 @@ const CityMaster: React.FC = () => {
       }
       handleCloseModal();
       fetchCities();
-    } catch (err: any) {
-      setFormError(err.response?.data?.message || 'Gagal menyimpan data kota.');
+    } catch (err) {
+      setFormError(apiMessage(err) || 'Gagal menyimpan data kota.');
     } finally {
       setIsSubmitting(false);
     }
@@ -106,9 +112,9 @@ const CityMaster: React.FC = () => {
     try {
       await api.delete(`/api/cities/${id}`);
       fetchCities();
-    } catch (err: any) {
+    } catch (err) {
       // Tangkap error jika foreign key terikat atau error lainnya
-      const errorMessage = err.response?.data?.message || 'Gagal menghapus kota. Kota mungkin masih digunakan dalam data Perdin.';
+      const errorMessage = apiMessage(err) || 'Gagal menghapus kota. Kota mungkin masih digunakan dalam data Perdin.';
       alert(`Error: ${errorMessage}`);
     }
   };

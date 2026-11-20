@@ -2,30 +2,23 @@ package middleware
 
 import (
 	"net/http"
+	"perdin-go/repository"
 	"perdin-go/security"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 // AuthMiddleware mengecek apakah token JWT valid
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(jwt *security.JWT, sessions *repository.SessionRepository, cookieName string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Authorization header is required"})
+		token, err := c.Cookie(cookieName)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Silakan masuk"})
 			c.Abort()
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{"message": "Invalid token format"})
-			c.Abort()
-			return
-		}
-
-		claims, err := security.ValidateToken(parts[1])
+		claims, err := jwt.Validate(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "Token kadaluarsa atau tidak valid"})
 			c.Abort()
@@ -33,9 +26,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// Simpan data user ke context Gin agar bisa dipakai di Handler
-		c.Set("userId", claims.UserID)
-		c.Set("username", claims.Username)
-		c.Set("role", claims.Role)
+		user, err := sessions.User(claims.ID, claims.UserID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Sesi tidak berlaku"})
+			return
+		}
+		c.Set("userId", user.ID)
+		c.Set("username", user.Username)
+		c.Set("role", user.Role)
 		c.Next()
 	}
 }

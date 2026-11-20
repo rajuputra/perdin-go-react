@@ -1,4 +1,3 @@
-import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -16,7 +15,7 @@ import CityMaster from "./pages/Admin/CityMaster";
 import UserMaster from "./pages/Admin/UserMaster";
 import PerdinList from "./pages/Pegawai/PerdinList";
 import ApprovalList from "./pages/SDM/ApprovalList";
-import { useAuth } from "./contexts/AuthContext";
+import { useAuth } from "./contexts/useAuth";
 
 const HomeRedirect = () => {
   const { user } = useAuth();

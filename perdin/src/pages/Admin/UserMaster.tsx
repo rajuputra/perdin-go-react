@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
-import api from '../../api/axios';
+import api, { apiMessage } from '../../api/axios';
 
 // Interfaces for API mappings
 interface BackendUser {
@@ -37,22 +37,28 @@ const UserMaster: React.FC = () => {
   const [formError, setFormError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await api.get<BackendUser[]>('/api/admin/users');
+      const response = await api.get<BackendUser[]>('/api/admin/users', { signal });
+      if (signal?.aborted) return;
       setUsers(response.data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal mengambil data user.');
+    } catch (err) {
+      if (signal?.aborted) return;
+      setError(apiMessage(err) || 'Gagal mengambil data user.');
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) void fetchUsers(controller.signal);
+    });
+    return () => controller.abort();
+  }, [fetchUsers]);
 
   const handleOpenAddModal = () => {
     setModalMode('ADD');
@@ -110,15 +116,15 @@ const UserMaster: React.FC = () => {
         }
         await api.post('/api/admin/users', formData);
       } else {
-        // Edit mode: only update role as requested: PUT /api/admin/users/{id}/role
         await api.put(`/api/admin/users/${selectedUserId}/role`, {
-          role: formData.role
+          role: formData.role,
+          password: formData.password,
         });
       }
       handleCloseModal();
       fetchUsers();
-    } catch (err: any) {
-      setFormError(err.response?.data?.message || 'Gagal menyimpan data user.');
+    } catch (err) {
+      setFormError(apiMessage(err) || 'Gagal menyimpan data user.');
     } finally {
       setIsSubmitting(false);
     }
@@ -277,15 +283,16 @@ const UserMaster: React.FC = () => {
                     />
                   </div>
 
-                  {modalMode === 'ADD' && (
-                    <div>
-                      <label htmlFor="password" className="block text-sm font-medium text-gray-700">Password</label>
+                                    <div>
+                      <label htmlFor="password" className="block text-sm font-medium text-gray-700">{modalMode === 'ADD' ? 'Password' : 'Password baru (opsional)'}</label>
                       <div className="relative mt-1">
                         <input
                           type={showPassword ? "text" : "password"}
                           name="password"
                           id="password"
-                          required
+                          required={modalMode === 'ADD'}
+                          minLength={12}
+                          autoComplete="new-password"
                           value={formData.password}
                           onChange={handleInputChange}
                           className="block w-full border border-gray-300 rounded-md shadow-sm py-2 pl-3 pr-10 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -306,8 +313,7 @@ const UserMaster: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
+                  </div>
 
                   <div>
                     <label htmlFor="role" className="block text-sm font-medium text-gray-700">Role</label>

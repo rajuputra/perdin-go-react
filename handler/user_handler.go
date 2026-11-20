@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"perdin-go/models"
 	"perdin-go/repository"
 	"perdin-go/security"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type UserHandler struct {
@@ -19,9 +22,9 @@ func NewUserHandler(ur repository.UserRepository) *UserHandler {
 
 // Request Payload khusus Create User
 type CreateUserRequest struct {
-	Username string `json:"username" binding:"required"`
+	Username string `json:"username" binding:"required,max=100"`
 	Password string `json:"password" binding:"required"`
-	Role     string `json:"role" binding:"required"`
+	Role     string `json:"role" binding:"required,oneof=ADMIN PEGAWAI DIVISI_SDM"`
 }
 
 func (h *UserHandler) CreateUser(c *gin.Context) {
@@ -31,8 +34,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	if h.userRepo.ExistsByUsername(req.Username) {
-		c.JSON(http.StatusConflict, gin.H{"message": "Username sudah terdaftar"})
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username == "" || len(req.Password) < 12 || len(req.Password) > 72 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Username wajib diisi dan kata sandi harus 12–72 byte"})
 		return
 	}
 
@@ -51,7 +55,11 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	savedUser, err := h.userRepo.Save(newUser)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			c.JSON(http.StatusConflict, gin.H{"message": "Username sudah terdaftar"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal membuat pengguna"})
 		return
 	}
 
@@ -61,6 +69,40 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		"username": savedUser.Username,
 		"role":     savedUser.Role,
 	})
+}
+
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Role     string `json:"role" binding:"required,oneof=ADMIN PEGAWAI DIVISI_SDM"`
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || (req.Password != "" && (len(req.Password) < 12 || len(req.Password) > 72)) {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Peran atau kata sandi tidak valid"})
+		return
+	}
+	var hash string
+	if req.Password != "" {
+		var err error
+		hash, err = security.HashPassword(req.Password)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memproses kata sandi"})
+			return
+		}
+	}
+	switch err := h.userRepo.UpdateAccess(c.GetUint("userId"), id, req.Role, hash); {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"message": "Pengguna tidak ditemukan"})
+	case errors.Is(err, repository.ErrAdminRequired):
+		c.JSON(http.StatusConflict, gin.H{"message": "Perubahan ditolak. Minimal satu administrator harus tetap aktif."})
+	case err != nil:
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memperbarui pengguna"})
+	default:
+		c.Status(http.StatusNoContent)
+	}
 }
 
 // DTO untuk Response Data User (Tanpa Password)
@@ -74,12 +116,12 @@ type UserResponse struct {
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
 	users, err := h.userRepo.FindAll()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal mengambil pengguna"})
 		return
 	}
 
 	// Mapping dari model ke DTO
-	var res []UserResponse
+	res := make([]UserResponse, 0, len(users))
 	for _, u := range users {
 		res = append(res, UserResponse{
 			ID:       u.ID,

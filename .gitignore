@@ -9,6 +9,8 @@
 
 # Environment variables
 .env
+.env.*
+!.env.example
 
 # Frontend / Node
 perdin/node_modules/

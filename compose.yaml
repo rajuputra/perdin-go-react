@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_DB: dinasflow
+      POSTGRES_USER: dinasflow
+      POSTGRES_PASSWORD: ${DINASFLOW_DB_PASSWORD:?Tetapkan DINASFLOW_DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dinasflow", "-d", "dinasflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+  api:
+    build:
+      context: .
+      target: api
+    environment:
+      GIN_MODE: release
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: dinasflow
+      DB_USER: dinasflow
+      DB_PASSWORD: ${DINASFLOW_DB_PASSWORD:?Tetapkan DINASFLOW_DB_PASSWORD}
+      JWT_SECRET: ${DINASFLOW_JWT_SECRET:?Tetapkan DINASFLOW_JWT_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "127.0.0.1:${DINASFLOW_WEB_PORT:-15082}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  db-data:

@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -10,9 +11,9 @@ import (
 	"perdin-go/middleware"
 	"perdin-go/models"
 	"perdin-go/repository"
+	"perdin-go/security"
 	"perdin-go/service"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -20,8 +21,18 @@ import (
 func main() {
 	// Load Env & Connect DB
 	godotenv.Load()
+	jwt, err := security.NewJWT(os.Getenv("JWT_SECRET"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	config.ConnectDB()
-	config.DB.AutoMigrate(&models.User{}, &models.City{}, &models.PerdinRequest{})
+	if err := config.DB.AutoMigrate(&models.User{}, &models.City{}, &models.PerdinRequest{}, &models.Session{}); err != nil {
+		log.Fatal("Migrasi database gagal:", err)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "init-admin" {
+		initAdmin()
+		return
+	}
 
 	// Setup Dependency Injection
 	// Repositories
@@ -34,7 +45,8 @@ func main() {
 	perdinSvc := service.NewPerdinService(perdinRepo, userRepo, cityRepo, allowanceSvc)
 
 	// Handlers
-	authHandler := handler.NewAuthHandler(userRepo)
+	sessions := repository.NewSessionRepository(config.DB)
+	authHandler := handler.NewAuthHandler(userRepo, sessions, jwt, os.Getenv("GIN_MODE") == gin.ReleaseMode)
 	cityHandler := handler.NewCityHandler(cityRepo)
 	userHandler := handler.NewUserHandler(userRepo)
 	perdinHandler := handler.NewPerdinHandler(perdinSvc)
@@ -42,36 +54,50 @@ func main() {
 	// Setup Gin Router
 	router := gin.Default()
 
-	// Konfigurasi CORS
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
-	}))
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatal(err)
+	}
 
 	// Setup Routes
 	api := router.Group("/api")
+	api.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		switch c.Request.Method {
+		case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
+			if c.GetHeader("X-DinasFlow-Request") != "1" {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Header permintaan tidak valid"})
+				return
+			}
+			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 64<<10)
+		}
+		c.Next()
+	})
+	api.GET("/health", func(c *gin.Context) {
+		db, err := config.DB.DB()
+		if err != nil || db.PingContext(c.Request.Context()) != nil {
+			c.Status(http.StatusServiceUnavailable)
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
 	{
 		// PUBLIC ROUTES (Tanpa Token)
 		api.POST("/auth/login", authHandler.Login)
 
-		api.POST("/auth/logout", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "Logout berhasil"})
-		})
+		api.POST("/auth/logout", authHandler.Logout)
 
 		// PROTECTED ROUTES (Harus Login)
 		protected := api.Group("/")
-		protected.Use(middleware.AuthMiddleware())
+		protected.Use(middleware.AuthMiddleware(jwt, sessions, handler.SessionCookie))
 		{
+			protected.GET("/auth/me", authHandler.Me)
 			// --- RUTE MASTER USER (Hanya ADMIN) ---
 			userRoutes := protected.Group("/admin/users")
 			userRoutes.Use(middleware.RequireRole("ADMIN"))
 			{
 				userRoutes.GET("", userHandler.GetAllUsers)
 				userRoutes.POST("", userHandler.CreateUser)
+				userRoutes.PUT("/:id/role", userHandler.UpdateUser)
 			}
 
 			// --- RUTE MASTER KOTA (ADMIN & DIVISI_SDM) ---
@@ -81,8 +107,9 @@ func main() {
 			cityAdminRoutes := cityRoutes.Group("")
 			cityAdminRoutes.Use(middleware.RequireRole("ADMIN", "DIVISI_SDM"))
 			{
-				cityRoutes.POST("", cityHandler.Create)
-				cityRoutes.DELETE("/:id", cityHandler.Delete)
+				cityAdminRoutes.POST("", cityHandler.Create)
+				cityAdminRoutes.PUT("/:id", cityHandler.Update)
+				cityAdminRoutes.DELETE("/:id", cityHandler.Delete)
 			}
 
 			// --- RUTE PERDIN ---
@@ -105,5 +132,10 @@ func main() {
 		port = "8080"
 	}
 	log.Printf("Server Go berjalan di port %s", port)
-	router.Run(":" + port)
+	server := &http.Server{
+		Addr: ":" + port, Handler: router,
+		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second,
+		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
+	}
+	log.Fatal(server.ListenAndServe())
 }

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, AlertCircle, Loader2, Calendar, MapPin, CheckCircle2 } from 'lucide-react';
-import api from '../../api/axios';
+import api, { apiMessage } from '../../api/axios';
 import type { PerdinRequest, PerdinRequestPayload, City } from '../../types';
 
 const PerdinList: React.FC = () => {
@@ -16,7 +16,7 @@ const PerdinList: React.FC = () => {
   const [formError, setFormError] = useState('');
 
   // Form State
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Jakarta' }).format(new Date());
   const initialFormState: PerdinRequestPayload = {
     purpose: '',
     startDate: today,
@@ -26,15 +26,16 @@ const PerdinList: React.FC = () => {
   };
   const [formData, setFormData] = useState<PerdinRequestPayload>(initialFormState);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     setError('');
     try {
       // Fetch both requests and cities concurrently
       const [requestsRes, citiesRes] = await Promise.all([
-        api.get<PerdinRequest[]>('/api/perdin/my-requests'),
-        api.get<City[]>('/api/cities')
+        api.get<PerdinRequest[]>('/api/perdin/my-requests', { signal }),
+        api.get<City[]>('/api/cities', { signal })
       ]);
+      if (signal?.aborted) return;
       setRequests(requestsRes.data);
       setCities(citiesRes.data);
       
@@ -46,16 +47,21 @@ const PerdinList: React.FC = () => {
           destinationCityId: citiesRes.data.length > 1 ? citiesRes.data[1].id : citiesRes.data[0].id
         }));
       }
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal mengambil data. Pastikan server merespon dengan benar.');
+    } catch (err) {
+      if (signal?.aborted) return;
+      setError(apiMessage(err) || 'Gagal mengambil data. Pastikan server merespon dengan benar.');
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) void fetchData(controller.signal);
+    });
+    return () => controller.abort();
+  }, [fetchData]);
 
   const handleOpenModal = () => {
     setFormError('');
@@ -66,11 +72,11 @@ const PerdinList: React.FC = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     // Reset to defaults
-    setFormData(prev => ({
+    setFormData({
       ...initialFormState,
       originCityId: cities.length > 0 ? cities[0].id : 0,
       destinationCityId: cities.length > 1 ? cities[1].id : (cities.length > 0 ? cities[0].id : 0)
-    }));
+    });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -109,16 +115,11 @@ const PerdinList: React.FC = () => {
       const requestsRes = await api.get<PerdinRequest[]>('/api/perdin/my-requests');
       setRequests(requestsRes.data);
       
-    } catch (err: any) {
-      setFormError(err.response?.data?.message || 'Gagal mengirim pengajuan Perdin.');
+    } catch (err) {
+      setFormError(apiMessage(err) || 'Gagal mengirim pengajuan Perdin.');
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const getCityName = (cityId: number) => {
-    const city = cities.find(c => c.id === cityId);
-    return city ? city.name : 'Unknown';
   };
 
   const getStatusBadge = (status: string) => {

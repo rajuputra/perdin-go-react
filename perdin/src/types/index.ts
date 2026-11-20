@@ -52,14 +52,7 @@ export interface PerdinRequest {
 }
 
 export interface LoginResponse {
-  token: string;
   id: number;
   username: string;
-  roles?: Role[];
-  role?: string;
-}
-
-export interface ForgotPasswordResponse {
-  message: string;
-  info: string;
+  role: Role;
 }

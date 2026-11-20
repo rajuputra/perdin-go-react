@@ -2,7 +2,6 @@ package security
 
 import (
 	"errors"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -21,7 +20,18 @@ func CheckPasswordHash(password, hash string) bool {
 }
 
 // --- JWT ---
-var jwtKey = []byte(os.Getenv("JWT_SECRET"))
+type JWT struct {
+	key []byte
+}
+
+const SessionLifetime = 8 * time.Hour
+
+func NewJWT(secret string) (*JWT, error) {
+	if len(secret) < 32 {
+		return nil, errors.New("JWT_SECRET harus berisi minimal 32 byte")
+	}
+	return &JWT{key: []byte(secret)}, nil
+}
 
 // Custom Claims (Payload JWT)
 type JWTClaim struct {
@@ -31,35 +41,35 @@ type JWTClaim struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateJWT(userId uint, username string, role string) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour)
+func (j *JWT) Generate(userID uint, sessionID string, now time.Time) (string, error) {
 	claims := &JWTClaim{
-		UserID:   userId,
-		Username: username,
-		Role:     role,
+		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        sessionID,
+			ExpiresAt: jwt.NewNumericDate(now.Add(SessionLifetime)),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtKey)
+	return token.SignedString(j.key)
 }
 
-func ValidateToken(signedToken string) (*JWTClaim, error) {
+func (j *JWT) Validate(signedToken string) (*JWTClaim, error) {
 	token, err := jwt.ParseWithClaims(
 		signedToken,
 		&JWTClaim{},
 		func(token *jwt.Token) (interface{}, error) {
-			return jwtKey, nil
+			return j.key, nil
 		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
 	)
 	if err != nil {
 		return nil, err
 	}
 	claims, ok := token.Claims.(*JWTClaim)
-	if !ok || !token.Valid {
+	if !ok || !token.Valid || claims.ID == "" || claims.UserID == 0 {
 		return nil, errors.New("token tidak valid")
 	}
 	return claims, nil

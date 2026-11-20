@@ -5,8 +5,16 @@ import (
 	"perdin-go/dto"
 	"perdin-go/models"
 	"perdin-go/repository"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
+
+var ErrInvalidSubmission = errors.New("tujuan, kota atau tanggal perjalanan tidak valid")
+var ErrCityNotFound = errors.New("kota asal atau tujuan tidak ditemukan")
+
+var jakarta = time.FixedZone("WIB", 7*60*60)
 
 type PerdinService interface {
 	SubmitPerdin(userId uint, req dto.PerdinSubmissionRequest) (dto.PerdinResponse, error)
@@ -41,7 +49,7 @@ func mapToResponse(p models.PerdinRequest) dto.PerdinResponse {
 		DestinationCityName: p.DestinationCity.Name,
 		Duration:            p.Duration,
 		Status:              p.Status,
-		TanggalPengajuan:    p.TanggalPengajuan.Format("2006-01-02T15:04:05Z"),
+		TanggalPengajuan:    p.TanggalPengajuan.Format(time.DateOnly),
 		DailyAllowance:      p.DailyAllowance,
 		Currency:            p.Currency,
 		TotalAllowance:      p.TotalAllowance,
@@ -67,36 +75,50 @@ func (s *perdinService) performCalculations(p models.PerdinRequest) allowanceCal
 }
 
 func (s *perdinService) SubmitPerdin(userId uint, req dto.PerdinSubmissionRequest) (dto.PerdinResponse, error) {
+	now := time.Now().In(jakarta)
+	start, startErr := time.Parse(time.DateOnly, req.StartDate)
+	end, endErr := time.Parse(time.DateOnly, req.EndDate)
+	purpose := strings.TrimSpace(req.Purpose)
+	if startErr != nil || endErr != nil || req.StartDate < now.Format(time.DateOnly) ||
+		end.Before(start) || req.OriginCityID == req.DestinationCityID || purpose == "" {
+		return dto.PerdinResponse{}, ErrInvalidSubmission
+	}
 	user, err := s.userRepo.FindById(userId)
 	if err != nil {
-		return dto.PerdinResponse{}, errors.New("user tidak ditemukan")
+		return dto.PerdinResponse{}, err
 	}
 
 	origin, err := s.cityRepo.FindById(req.OriginCityID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return dto.PerdinResponse{}, ErrCityNotFound
+	}
 	if err != nil {
-		return dto.PerdinResponse{}, errors.New("kota asal tidak ditemukan")
+		return dto.PerdinResponse{}, err
 	}
 
 	dest, err := s.cityRepo.FindById(req.DestinationCityID)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return dto.PerdinResponse{}, ErrCityNotFound
+	}
 	if err != nil {
-		return dto.PerdinResponse{}, errors.New("kota tujuan tidak ditemukan")
+		return dto.PerdinResponse{}, err
 	}
 
-	duration := s.allowanceServ.CalculateDuration(req.StartDate, req.EndDate)
+	duration := s.allowanceServ.CalculateDuration(start, end)
 
 	perdin := models.PerdinRequest{
 		UserID:            user.ID,
 		User:              user,
-		Purpose:           req.Purpose,
-		StartDate:         req.StartDate,
-		EndDate:           req.EndDate,
+		Purpose:           purpose,
+		StartDate:         start,
+		EndDate:           end,
 		OriginCityID:      origin.ID,
 		OriginCity:        origin,
 		DestinationCityID: dest.ID,
 		DestinationCity:   dest,
 		Duration:          duration,
 		Status:            "PENDING",
-		TanggalPengajuan:  time.Now(),
+		TanggalPengajuan:  now,
 	}
 
 	savedPerdin, err := s.perdinRepo.Save(perdin)
@@ -110,7 +132,7 @@ func (s *perdinService) SubmitPerdin(userId uint, req dto.PerdinSubmissionReques
 func (s *perdinService) GetPerdinDetailWithCalculation(perdinId uint) (dto.PerdinResponse, error) {
 	perdin, err := s.perdinRepo.FindById(perdinId)
 	if err != nil {
-		return dto.PerdinResponse{}, errors.New("data perdin tidak ditemukan")
+		return dto.PerdinResponse{}, err
 	}
 
 	response := mapToResponse(perdin)
@@ -137,11 +159,11 @@ func (s *perdinService) GetPerdinDetailWithCalculation(perdinId uint) (dto.Perdi
 func (s *perdinService) ApprovePerdin(perdinId uint) (dto.PerdinResponse, error) {
 	perdin, err := s.perdinRepo.FindById(perdinId)
 	if err != nil {
-		return dto.PerdinResponse{}, errors.New("data perdin tidak ditemukan")
+		return dto.PerdinResponse{}, err
 	}
 
 	if perdin.Status != "PENDING" {
-		return dto.PerdinResponse{}, errors.New("hanya pengajuan PENDING yang dapat disetujui")
+		return dto.PerdinResponse{}, repository.ErrDecisionConflict
 	}
 
 	calc := s.performCalculations(perdin)
@@ -152,12 +174,11 @@ func (s *perdinService) ApprovePerdin(perdinId uint) (dto.PerdinResponse, error)
 	perdin.TotalAllowance = &calc.Total
 	perdin.Currency = &calc.Currency
 
-	savedPerdin, err := s.perdinRepo.Save(perdin)
-	if err != nil {
+	if err := s.perdinRepo.Decide(perdin); err != nil {
 		return dto.PerdinResponse{}, err
 	}
 
-	res := mapToResponse(savedPerdin)
+	res := mapToResponse(perdin)
 	dist := calc.Distance
 	res.Distance = &dist
 	return res, nil
@@ -166,20 +187,19 @@ func (s *perdinService) ApprovePerdin(perdinId uint) (dto.PerdinResponse, error)
 func (s *perdinService) RejectPerdin(perdinId uint) (dto.PerdinResponse, error) {
 	perdin, err := s.perdinRepo.FindById(perdinId)
 	if err != nil {
-		return dto.PerdinResponse{}, errors.New("data perdin tidak ditemukan")
-	}
-
-	if perdin.Status != "PENDING" {
-		return dto.PerdinResponse{}, errors.New("hanya pengajuan PENDING yang dapat ditolak")
-	}
-
-	perdin.Status = "REJECTED"
-	savedPerdin, err := s.perdinRepo.Save(perdin)
-	if err != nil {
 		return dto.PerdinResponse{}, err
 	}
 
-	return mapToResponse(savedPerdin), nil
+	if perdin.Status != "PENDING" {
+		return dto.PerdinResponse{}, repository.ErrDecisionConflict
+	}
+
+	perdin.Status = "REJECTED"
+	if err := s.perdinRepo.Decide(perdin); err != nil {
+		return dto.PerdinResponse{}, err
+	}
+
+	return mapToResponse(perdin), nil
 }
 
 // Method Getter List

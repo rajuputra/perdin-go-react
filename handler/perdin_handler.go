@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
+	"gorm.io/gorm"
 	"net/http"
 	"perdin-go/dto"
+	"perdin-go/repository"
 	"perdin-go/service"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -28,7 +30,7 @@ func (h *PerdinHandler) SubmitPerdin(c *gin.Context) {
 	userId := c.MustGet("userId").(uint) // Ambil ID dari token JWT
 	res, err := h.perdinService.SubmitPerdin(userId, req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		respondPerdinError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
@@ -39,7 +41,7 @@ func (h *PerdinHandler) GetMyHistory(c *gin.Context) {
 	userId := c.MustGet("userId").(uint)
 	res, err := h.perdinService.GetPerdinHistoryByUser(userId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		respondPerdinError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
@@ -58,7 +60,7 @@ func (h *PerdinHandler) GetAllPerdin(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		respondPerdinError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
@@ -66,10 +68,13 @@ func (h *PerdinHandler) GetAllPerdin(c *gin.Context) {
 
 // [GET] /api/perdin/:id/detail
 func (h *PerdinHandler) GetDetail(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	res, err := h.perdinService.GetPerdinDetailWithCalculation(uint(id))
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	res, err := h.perdinService.GetPerdinDetailWithCalculation(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": err.Error()})
+		respondPerdinError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
@@ -77,10 +82,13 @@ func (h *PerdinHandler) GetDetail(c *gin.Context) {
 
 // [PUT] /api/perdin/:id/approve
 func (h *PerdinHandler) Approve(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	res, err := h.perdinService.ApprovePerdin(uint(id))
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	res, err := h.perdinService.ApprovePerdin(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		respondPerdinError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
@@ -88,11 +96,27 @@ func (h *PerdinHandler) Approve(c *gin.Context) {
 
 // [PUT] /api/perdin/:id/reject
 func (h *PerdinHandler) Reject(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	res, err := h.perdinService.RejectPerdin(uint(id))
+	id, ok := pathID(c)
+	if !ok {
+		return
+	}
+	res, err := h.perdinService.RejectPerdin(id)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		respondPerdinError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, res)
+}
+
+func respondPerdinError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, service.ErrInvalidSubmission), errors.Is(err, service.ErrCityNotFound):
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"message": "Pengajuan tidak ditemukan"})
+	case errors.Is(err, repository.ErrDecisionConflict):
+		c.JSON(http.StatusConflict, gin.H{"message": "Pengajuan sudah diproses"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Gagal memproses pengajuan"})
+	}
 }
