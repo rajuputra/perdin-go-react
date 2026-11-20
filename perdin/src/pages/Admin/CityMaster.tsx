@@ -1,5 +1,6 @@
+import { Summary } from '../../components/Summary';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil, Trash2, X, AlertCircle, Loader2 } from 'lucide-react';
+import { Building2, MapPin, Globe2, Plus, Pencil, Trash2, X, AlertCircle, Loader2 } from 'lucide-react';
 import api, { apiMessage } from '../../api/axios';
 import type { City, CityPayload } from '../../types';
 
@@ -121,7 +122,7 @@ const CityMaster: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="df-page-header">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Master Kota</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -139,6 +140,8 @@ const CityMaster: React.FC = () => {
         </div>
       </div>
 
+      {!isLoading && !error && <Summary items={[{ label: "Kota terdaftar", count: cities.length, icon: Building2 }, { label: "Dalam negeri", count: cities.filter(city => !city.isForeign).length, icon: MapPin }, { label: "Luar negeri", count: cities.filter(city => city.isForeign).length, icon: Globe2 }]} />}
+
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md shadow-sm">
           <div className="flex">
@@ -151,13 +154,14 @@ const CityMaster: React.FC = () => {
       )}
 
       {/* Table Section */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+      <div className="df-data-panel bg-white shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
           </div>
         ) : cities.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+          <div className="df-empty flex flex-col items-center justify-center h-64 text-gray-500">
+            <Building2 size={29} aria-hidden="true" />
             <p>Belum ada data kota.</p>
           </div>
         ) : (
@@ -240,12 +244,12 @@ const CityMaster: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             {/* Overlay */}
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={handleCloseModal}></div>
+            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={handleCloseModal}></div>
 
             <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
             {/* Modal Panel */}
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="df-dialog-card inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex justify-between items-center mb-5">
                   <h3 className="text-lg leading-6 font-medium text-gray-900" id="modal-title">

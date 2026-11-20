@@ -1,163 +1,65 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Building2, ClipboardCheck, FileText, LogOut, Users } from "lucide-react";
+import { Brand } from "../components/Brand";
 import { useAuth } from "../contexts/useAuth";
-import {
-  Building2,
-  Users,
-  FileText,
-  ClipboardCheck,
-  LogOut,
-  Menu,
-  X,
-  User as UserIcon,
-} from "lucide-react";
+import type { Role } from "../types";
 
-export const DashboardLayout: React.FC = () => {
+const pages = [
+  { name: "Master Kota", path: "/admin/cities", icon: Building2, roles: ["ADMIN", "DIVISI_SDM"] },
+  { name: "Master Pengguna", path: "/admin/users", icon: Users, roles: ["ADMIN"] },
+  { name: "Pengajuan Saya", path: "/pegawai/perdin", icon: FileText, roles: ["PEGAWAI"] },
+  { name: "Persetujuan", path: "/sdm/perdin", icon: ClipboardCheck, roles: ["DIVISI_SDM"] },
+];
+
+const roleLabel: Record<Role, string> = {
+  ADMIN: "Administrator", DIVISI_SDM: "Divisi SDM", PEGAWAI: "Pegawai",
+};
+
+export function DashboardLayout() {
   const { user, logout } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const location = useLocation();
-
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
-  const getMenuItems = () => {
-    if (!user) return [];
-
-    const items = [];
-
-    // Master Kota (Admin & SDM)
-    if (user?.roles?.includes("ADMIN") || user?.roles?.includes("DIVISI_SDM")) {
-      items.push({
-        name: "Master Kota",
-        path: "/admin/cities",
-        icon: <Building2 className="w-5 h-5" />,
-      });
-    }
-
-    // Admin-only Menus
-    if (user?.roles?.includes("ADMIN")) {
-      items.push({
-        name: "Master User",
-        path: "/admin/users",
-        icon: <Users className="w-5 h-5" />,
-      });
-    }
-
-    // Pegawai Menus
-    if (user?.roles?.includes("PEGAWAI")) {
-      items.push({
-        name: "Pengajuan Perdin",
-        path: "/pegawai/perdin",
-        icon: <FileText className="w-5 h-5" />,
-      });
-    }
-
-    // SDM Menus
-    if (user?.roles?.includes("DIVISI_SDM")) {
-      items.push({
-        name: "Approval Perdin",
-        path: "/sdm/perdin",
-        icon: <ClipboardCheck className="w-5 h-5" />,
-      });
-    }
-
-    return items;
-  };
-
-  const menuItems = getMenuItems();
+  const { pathname } = useLocation();
+  const [logoutError, setLogoutError] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const menu = pages.filter(page => user?.roles.some(role => page.roles.includes(role)));
+  const section = menu.find(page => page.path === pathname);
+  async function signOut() {
+    setLogoutError(false);
+    setLeaving(true);
+    try { await logout(); }
+    catch { setLogoutError(true); }
+    finally { setLeaving(false); }
+  }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:static lg:translate-x-0 ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } flex flex-col`}
-      >
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
-          <span className="text-xl font-bold text-blue-600">Perdin App</span>
-          <button
-            onClick={toggleSidebar}
-            className="lg:hidden text-gray-500 hover:text-gray-700"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-          {menuItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={() => setIsSidebarOpen(false)}
-                className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
-                  isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                }`}
-              >
-                <span
-                  className={`mr-3 ${isActive ? "text-blue-600" : "text-gray-400"}`}
-                >
-                  {item.icon}
-                </span>
-                {item.name}
-              </NavLink>
-            );
-          })}
+    <div className="df-shell">
+      <a href="#df-content" className="df-skip">Lewati ke konten</a>
+      <aside className="df-sidebar">
+        <div className="df-sidebar-brand"><Brand /></div>
+        <nav aria-label="Navigasi utama" className="df-navigation">
+          {menu.map(({ name, path, icon: Icon }) => (
+            <NavLink key={path} to={path} end>
+              <Icon size={19} aria-hidden="true" />
+              <span>{name}</span>
+            </NavLink>
+          ))}
         </nav>
-
-        <div className="p-4 border-t border-gray-200">
-          <button
-            onClick={() => void logout().catch(() => window.alert("Gagal keluar. Coba lagi."))}
-            className="flex items-center w-full px-4 py-3 text-sm font-medium text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-          >
-            <LogOut className="w-5 h-5 mr-3" />
-            Logout
-          </button>
-        </div>
       </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-10">
-          <button
-            onClick={toggleSidebar}
-            className="text-gray-500 hover:text-gray-700 lg:hidden"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-
-          <div className="flex items-center ml-auto space-x-4">
-            <div className="flex items-center bg-gray-50 rounded-full px-4 py-2 border border-gray-200">
-              <UserIcon className="w-5 h-5 text-gray-500 mr-2" />
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-900 leading-tight">
-                  {user?.username}
-                </span>
-                <span className="text-xs text-gray-500 leading-tight">
-                  {user?.roles?.join(", ") || ""}
-                </span>
-              </div>
-            </div>
+      <div className="df-workspace">
+        <header className="df-topbar">
+          <div className="df-mobile-brand"><Brand /></div>
+          <div className="df-breadcrumb">Ruang kerja <span aria-hidden="true">/</span> <strong>{section?.name}</strong></div>
+          <div className="df-account">
+            <span className="df-avatar" aria-hidden="true">{user?.username.slice(0, 2).toUpperCase()}</span>
+            <div className="df-account-name"><strong>{user?.username}</strong><small>{user?.roles.map(role => roleLabel[role]).join(", ")}</small></div>
+            <button type="button" disabled={leaving} onClick={() => void signOut()} aria-label="Keluar" title="Keluar"><LogOut size={18} aria-hidden="true" /></button>
           </div>
         </header>
-
-        {/* Page Content */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 sm:p-6 lg:p-8">
-          <Outlet />
+        <main id="df-content" tabIndex={-1} className="df-content">
+          {logoutError && <p role="alert" className="df-error">Gagal keluar. Silakan coba lagi.</p>}
+          <div className="df-page-enter" key={pathname}><Outlet /></div>
         </main>
       </div>
     </div>
   );
-};
+}

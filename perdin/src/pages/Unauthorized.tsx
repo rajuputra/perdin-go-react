@@ -1,27 +1,17 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import { ArrowLeft, LockKeyhole } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Brand } from "../components/Brand";
 
-const Unauthorized: React.FC = () => {
+export default function Unauthorized() {
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-red-600">
-          403 - Akses Ditolak
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Anda tidak memiliki izin untuk mengakses halaman tersebut.
-        </p>
-        <div className="mt-6">
-          <Link
-            to="/"
-            className="font-medium text-blue-600 hover:text-blue-500"
-          >
-            Kembali ke Beranda
-          </Link>
-        </div>
-      </div>
-    </div>
+    <main className="df-denied">
+      <Brand />
+      <section>
+        <LockKeyhole size={25} aria-hidden="true" />
+        <h1>Akses dibatasi</h1>
+        <p>Peran akun Anda tidak memiliki izin untuk membuka halaman ini.</p>
+        <Link to="/"><ArrowLeft size={16} aria-hidden="true" /> Kembali ke ruang kerja</Link>
+      </section>
+    </main>
   );
-};
-
-export default Unauthorized;
+}

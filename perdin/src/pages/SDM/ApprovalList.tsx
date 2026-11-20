@@ -1,5 +1,6 @@
+import { Summary } from '../../components/Summary';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Eye, CheckCircle, XCircle, Loader2, MapPin, Calendar, AlertCircle } from 'lucide-react';
+import { ClipboardCheck, Eye, CheckCircle, XCircle, Loader2, MapPin, Calendar, AlertCircle } from 'lucide-react';
 import api, { apiMessage } from '../../api/axios';
 import type { PerdinRequest } from '../../types';
 
@@ -8,6 +9,7 @@ const ApprovalList: React.FC = () => {
   const [requests, setRequests] = useState<PerdinRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   // Modal Detail State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,7 +25,7 @@ const ApprovalList: React.FC = () => {
       const endpoint = activeTab === 'NEW' ? '/api/perdin?status=PENDING' : '/api/perdin';
       const response = await api.get<PerdinRequest[]>(endpoint, { signal });
       if (signal?.aborted) return;
-      setRequests(response.data);
+      setRequests(activeTab === 'HISTORY' ? response.data.filter(req => req.status !== 'PENDING') : response.data);
     } catch (err) {
       if (signal?.aborted) return;
       setError(apiMessage(err) || 'Gagal mengambil data pengajuan Perdin.');
@@ -62,11 +64,13 @@ const ApprovalList: React.FC = () => {
   const handleAction = async (action: 'approve' | 'reject') => {
     if (!selectedDetail) return;
     setIsSubmitting(true);
+    setNotice('');
     setActionError('');
     
     try {
       await api.put(`/api/perdin/${selectedDetail.id}/${action}`);
       handleCloseModal();
+      setNotice(action === 'approve' ? 'Pengajuan disetujui.' : 'Pengajuan ditolak.');
       fetchRequests();
     } catch (err) {
       setActionError(apiMessage(err) || `Gagal memproses pengajuan.`);
@@ -113,12 +117,15 @@ const ApprovalList: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Approval Perjalanan Dinas</h1>
+      <div className="df-page-header df-page-header-text">
+        <h1 className="text-2xl font-bold text-gray-900">Persetujuan Perjalanan Dinas</h1>
         <p className="mt-1 text-sm text-gray-500">
           Evaluasi dan berikan persetujuan untuk pengajuan perjalanan dinas pegawai.
         </p>
       </div>
+
+      {notice && <p role="status" className="df-status-motion rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</p>}
+      {!isLoading && !error && <Summary items={[{ label: activeTab === "NEW" ? "Menunggu persetujuan" : "Pengajuan dalam riwayat", count: requests.length, icon: ClipboardCheck }]} />}
 
       {error && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md shadow-sm">
@@ -135,7 +142,7 @@ const ApprovalList: React.FC = () => {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-8" aria-label="Tabs">
           <button
-            onClick={() => setActiveTab('NEW')}
+            onClick={() => setActiveTab('NEW')} aria-pressed={activeTab === 'NEW'}
             className={`${
               activeTab === 'NEW'
                 ? 'border-blue-500 text-blue-600'
@@ -145,7 +152,7 @@ const ApprovalList: React.FC = () => {
             Pengajuan Baru
           </button>
           <button
-            onClick={() => setActiveTab('HISTORY')}
+            onClick={() => setActiveTab('HISTORY')} aria-pressed={activeTab === 'HISTORY'}
             className={`${
               activeTab === 'HISTORY'
                 ? 'border-blue-500 text-blue-600'
@@ -158,13 +165,14 @@ const ApprovalList: React.FC = () => {
       </div>
 
       {/* Table Section */}
-      <div className="bg-white shadow-sm border border-gray-200 rounded-lg overflow-hidden">
+      <div className="df-data-panel bg-white shadow-sm border border-gray-200 overflow-hidden">
         {isLoading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
           </div>
         ) : requests.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+          <div className="df-empty flex flex-col items-center justify-center h-64 text-gray-500">
+            <ClipboardCheck size={29} aria-hidden="true" />
             <p>{activeTab === 'NEW' ? 'Tidak ada pengajuan baru yang menunggu approval.' : 'Belum ada riwayat pengajuan.'}</p>
           </div>
         ) : (
@@ -234,10 +242,10 @@ const ApprovalList: React.FC = () => {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={handleCloseModal}></div>
+            <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" aria-hidden="true" onClick={handleCloseModal}></div>
             <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
 
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+            <div className="df-dialog-card inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex justify-between items-center mb-5 border-b pb-4">
                   <h3 className="text-lg leading-6 font-bold text-gray-900" id="modal-title">
